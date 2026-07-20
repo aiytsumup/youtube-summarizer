@@ -31,7 +31,7 @@ if st.button("Summarize Video"):
             with status_container.container():
                 st.info("📥 Streaming audio track from YouTube video...")
             
-            ydl_opts = {
+ydl_opts = {
                 # Fallback to standard progressive formats to bypass data-center IP binding
                 'format': 'worst/best',
                 'outtmpl': audio_filename,
