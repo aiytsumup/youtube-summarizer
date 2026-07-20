@@ -32,9 +32,10 @@ if st.button("Summarize Video"):
                 st.info("📥 Streaming audio track from YouTube video...")
             
             ydl_opts = {
-                'format': 'bestaudio/best',
+                # Fallback to standard progressive formats to bypass data-center IP binding
+                'format': 'worst/best',
                 'outtmpl': audio_filename,
-                'cookiefile': 'cookies.txt',  # Injects your cookie file safely
+                'cookiefile': 'cookies.txt',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
