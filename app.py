@@ -74,13 +74,14 @@ if st.button("Summarize Video"):
                 if not transcript_text.strip():
                     raise Exception("The extracted transcript is empty.")
 
-                # 4. Initialize the Gemini client and generate content
+               # 4. Initialize the Gemini client and generate content
                 client = genai.Client()
                 
                 prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
                 and summarizing the entire video and providing the important points in bullets.
                 Please provide the summary exactly in the {language} language."""
-               response = client.models.generate_content(
+                
+                response = client.models.generate_content(
                     model="gemini-3.5-flash",
                     contents=[prompt, transcript_text]
                 )
