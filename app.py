@@ -25,9 +25,9 @@ if st.button("Summarize Video"):
                     # For short links like youtu.be/xyz?si=abc
                     video_id = url.split("/")[-1].split("?")[0]
                 
-                # 2. Grab the text transcript using the updated API syntax
+                # 2. Grab the text transcript using the cookie file path formatting
                 api_instance = YouTubeTranscriptApi()
-                transcript_list = api_instance.fetch(video_id, cookies='cookies.txt').to_raw_data()
+                transcript_list = api_instance.fetch(video_id, cookies_file='cookies.txt').to_raw_data()
                 
                 # Join the text fragments into a single paragraph
                 transcript_text = " ".join([item['text'] for item in transcript_list])
