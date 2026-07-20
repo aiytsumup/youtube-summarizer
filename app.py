@@ -27,7 +27,7 @@ if st.button("Summarize Video"):
                 
                 # 2. Grab the text transcript using the updated API syntax
                 api_instance = YouTubeTranscriptApi()
-                transcript_list = api_instance.fetch(video_id).to_raw_data()
+                transcript_list = api_instance.fetch(video_id, cookies='cookies.txt').to_raw_data()
                 
                 # Join the text fragments into a single paragraph
                 transcript_text = " ".join([item['text'] for item in transcript_list])
