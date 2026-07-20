@@ -29,12 +29,12 @@ if st.button("Summarize Video"):
         try:
             # Step 1: Download the audio track using yt-dlp
             with status_container.container():
-                st.info("📥 Steaming audio track from YouTube video...")
+                st.info("📥 Streaming audio track from YouTube video...")
             
-           ydl_opts = {
+            ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': audio_filename,
-                'cookiefile': 'cookies.txt',  # <-- Add this line right here!
+                'cookiefile': 'cookies.txt',  # Injects your cookie file safely
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
@@ -78,7 +78,7 @@ if st.button("Summarize Video"):
             You must reply entirely and explicitly in the {language} language."""
             
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-2.5-flash",
                 contents=[prompt, audio_file]
             )
             
