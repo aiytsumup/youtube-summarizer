@@ -1,9 +1,11 @@
 import streamlit as st
 import yt_dlp
+import os
+import time
 from google import genai
 
-st.title("🎬 AI YouTube Summarizer")
-st.write("Paste a YouTube link below to get an instant AI summary of the video transcript.")
+st.title("🎬 AI YouTube Summarizer (Stable Audio Engine)")
+st.write("Paste a YouTube link below. The app will securely process the video's audio track via Gemini for a 100% reliable summary.")
 
 # Language selection dropdown
 language = st.selectbox(
@@ -16,101 +18,90 @@ url = st.text_input("Paste YouTube Video URL:", placeholder="https://www.youtube
 
 if st.button("Summarize Video"):
     if url:
-        with st.spinner("Extracting transcript data and generating summary..."):
-            try:
-                # 1. Configure yt-dlp options to safely extract subtitles/transcripts
-                ydl_opts = {
-                    'writesubtitles': True,
-                    'writeautomaticsub': True,
-                    'skip_download': True,
-                    'quiet': True,
-                    'no_warnings': True,
-                }
-                
-                # 2. Extract information using the yt-dlp context manager
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info_dict = ydl.extract_info(url, download=False)
-                    
-                    # Try to look for manually written subtitles first, then automatic captions
-                    subtitles = info_dict.get('subtitles') or info_dict.get('automatic_captions')
-                
-                # Default fallback language keys to check
-                lang_keys = ['en', 'en-US', 'en-GB']
-                chosen_subtitles = None
-                
-                if subtitles:
-                    # Look for an available English transcript track first
-                    for key in lang_keys:
-                        if key in subtitles:
-                            chosen_subtitles = subtitles[key]
-                            break
-                    # If specific keys aren't found, grab the first track available
-                    if not chosen_subtitles:
-                        chosen_subtitles = next(iter(subtitles.values()))
-                
-                if not chosen_subtitles:
-                    raise Exception("No transcript or auto-generated captions could be found for this video.")
-                
-               # 3. Locate the JSON formats and pull out text entries cleanly
-                # Filter strictly for the true json3 format to avoid XML parsing crashes
-                json_formats = [s for s in chosen_subtitles if s.get('ext') == 'json3']
-                
-                if json_formats:
-                    import requests
-                    sub_url = json_formats[0]['url']
-                    response = requests.get(sub_url)
-                    
-                    try:
-                        sub_data = response.json()
-                        transcript_fragments = []
-                        if 'events' in sub_data:
-                            for event in sub_data['events']:
-                                if 'segs' in event:
-                                    for seg in event['segs']:
-                                        if seg['utf8'].strip():
-                                            transcript_fragments.append(seg['utf8'].strip())
-                        transcript_text = " ".join(transcript_fragments)
-                    except ValueError:
-                        # Fallback if the endpoint returned text instead of JSON
-                        transcript_text = response.text
-                else:
-                    # If json3 isn't explicitly flagged, try downloading the first format as plain text
-                    import requests
-                    sub_url = chosen_subtitles[0]['url']
-                    transcript_text = requests.get(sub_url).text
-                
-                # Strip out any leftover raw subtitle tags if a text fallback occurred
-                import re
-                transcript_text = re.sub(r'<[^>]*>', '', transcript_text)
-                
-                if not transcript_text.strip():
-                    raise Exception("The extracted transcript is empty.")
+        # Create visual containers to keep UI clean
+        status_container = st.empty()
+        error_container = st.empty()
+        
+        # Audio file naming configuration
+        audio_filename = "youtube_audio_track"
+        audio_filepath = f"{audio_filename}.mp3"
+        
+        try:
+            # Step 1: Download the audio track using yt-dlp
+            with status_container.container():
+                st.info("📥 Steaming audio track from YouTube video...")
+            
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': audio_filename,
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            if not os.path.exists(audio_filepath):
+                raise Exception("Audio extraction failed. The media file was not created successfully.")
 
-                # 4. Initialize the Gemini client and generate content
-                client = genai.Client()
+            # Step 2: Upload the audio file to Google's Gemini File API
+            with status_container.container():
+                st.info("🚀 Uploading audio payload to Gemini processing infrastructure...")
+            
+            client = genai.Client()
+            audio_file = client.files.upload(file=audio_filepath)
+            
+            # Step 3: Wait for processing to finalize on Google's cloud servers
+            with status_container.container():
+                st.info("⚙️ Waiting for Google's multi-modal processing engine to ready the track...")
+            
+            while audio_file.state.name == "PROCESSING":
+                time.sleep(2)
+                audio_file = client.files.get(name=audio_file.name)
                 
-                prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
-                and summarizing the entire video and providing the important points in bullets.
-                Please provide the summary exactly in the {language} language."""
+            if audio_file.state.name == "FAILED":
+                raise Exception("Google media API failed to securely compile the video track.")
+
+            # Step 4: Generate the text content using the production flash model
+            with status_container.container():
+                st.info("🧠 Gemini is listening to the track and generating your summary...")
+            
+            prompt = f"""You are an advanced media intelligence assistant. 
+            Analyze the provided audio recording carefully. Break down the core discussion topics,
+            contextual narrative, and deliver structural bullet points detailing the key events or data.
+            You must reply entirely and explicitly in the {language} language."""
+            
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=[prompt, audio_file]
+            )
+            
+            # Clean up the UI status indicators and print the markdown text
+            status_container.empty()
+            st.success("✨ Summary Generated Successfully!")
+            st.write(response.text)
+            
+            # Step 5: Clean up the file from Google's servers immediately
+            client.files.delete(name=audio_file.name)
+            
+        except Exception as e:
+            status_container.empty()
+            error_msg = str(e)
+            
+            # Translate cryptic system bugs into elegant tips for your visitors
+            if "503" in error_msg or "high demand" in error_msg:
+                error_container.warning("⏳ The AI engine is experiencing heavy demand right now. Please wait a few moments and click again!")
+            elif "404" in error_msg:
+                error_container.error("🔍 We couldn't locate that specific link. Please double-check your formatting.")
+            else:
+                error_container.error(f"🩹 Something disrupted processing: {error_msg}")
                 
-                response = client.models.generate_content(
-                    model="gemini-3.5-flash",
-                    contents=[prompt, transcript_text]
-                )
-                
-                st.success("Summary Generated!")
-                st.write(response.text)
-                
-            except Exception as e:
-                # Catch the errors elegantly and show friendly messages to your users
-                error_msg = str(e)
-                
-                if "503" in error_msg or "high demand" in error_msg:
-                    st.warning("⏳ The AI server is extremely busy right now. Please wait 10 seconds and click 'Summarize Video' again!")
-                elif "Expecting value" in error_msg or "transcript" in error_msg or "No transcript" in error_msg:
-                    st.error("🎥 YouTube is blocking this video's automated transcript right now. Please try a different video link.")
-                elif "404" in error_msg:
-                    st.error("🔍 We couldn't find that video. Please double-check your YouTube link and try again.")
-                else:
-                    # Clean fallback for any unexpected issues
-                    st.error("🩹 Something went wrong on our end while reading the video. Please try again in a moment!")
+        finally:
+            # Crucial cleanup step to maintain server environment storage hygiene
+            if os.path.exists(audio_filepath):
+                os.remove(audio_filepath)
