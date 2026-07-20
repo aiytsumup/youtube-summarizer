@@ -102,4 +102,15 @@ if st.button("Summarize Video"):
                 st.write(response.text)
                 
             except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+                # Catch the errors elegantly and show friendly messages to your users
+                error_msg = str(e)
+                
+                if "503" in error_msg or "high demand" in error_msg:
+                    st.warning("⏳ The AI server is extremely busy right now. Please wait 10 seconds and click 'Summarize Video' again!")
+                elif "Expecting value" in error_msg or "transcript" in error_msg or "No transcript" in error_msg:
+                    st.error("🎥 YouTube is blocking this video's automated transcript right now. Please try a different video link.")
+                elif "404" in error_msg:
+                    st.error("🔍 We couldn't find that video. Please double-check your YouTube link and try again.")
+                else:
+                    # Clean fallback for any unexpected issues
+                    st.error("🩹 Something went wrong on our end while reading the video. Please try again in a moment!")
