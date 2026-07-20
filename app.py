@@ -1,11 +1,11 @@
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi
+import yt_dlp
 from google import genai
 
 st.title("🎬 AI YouTube Summarizer")
 st.write("Paste a YouTube link below to get an instant AI summary of the video transcript.")
 
-# 👇 1. Added the language selection dropdown right here!
+# Language selection dropdown
 language = st.selectbox(
     "Select the summary language:",
     ["English", "Hindi", "Tamil", "Telugu", "Spanish", "French", "German"]
@@ -16,34 +16,65 @@ url = st.text_input("Paste YouTube Video URL:", placeholder="https://www.youtube
 
 if st.button("Summarize Video"):
     if url:
-        with st.spinner("Fetching transcript and generating summary..."):
+        with st.spinner("Extracting transcript data and generating summary..."):
             try:
-                import requests
-                import http.cookiejar
+                # 1. Configure yt-dlp options to safely extract subtitles/transcripts
+                ydl_opts = {
+                    'writesubtitles': True,
+                    'writeautomaticsub': True,
+                    'skip_download': True,
+                    'quiet': True,
+                    'no_warnings': True,
+                }
                 
-                # 1. Parse the video ID out of the URL string cleanly
-                if "v=" in url:
-                    video_id = url.split("v=")[-1].split("&")[0]
+                # 2. Extract information using the yt-dlp context manager
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info_dict = ydl.extract_info(url, download=False)
+                    
+                    # Try to look for manually written subtitles first, then automatic captions
+                    subtitles = info_dict.get('subtitles') or info_dict.get('automatic_captions')
+                
+                # Default fallback language keys to check
+                lang_keys = ['en', 'en-US', 'en-GB']
+                chosen_subtitles = None
+                
+                if subtitles:
+                    # Look for an available English transcript track first
+                    for key in lang_keys:
+                        if key in subtitles:
+                            chosen_subtitles = subtitles[key]
+                            break
+                    # If specific keys aren't found, grab the first track available
+                    if not chosen_subtitles:
+                        chosen_subtitles = next(iter(subtitles.values()))
+                
+                if not chosen_subtitles:
+                    raise Exception("No transcript or auto-generated captions could be found for this video.")
+                
+                # 3. Locate the JSON or plain text formats and pull out text entries
+                # Look for modern JSON/srv3 formats that don't need heavy web parsing
+                json_formats = [s for s in chosen_subtitles if s.get('ext') in ['json3', 'srv3']]
+                
+                if json_formats:
+                    import requests
+                    sub_url = json_formats[0]['url']
+                    sub_data = requests.get(sub_url).json()
+                    # Loop through track layers to extract clean sentence fragments
+                    transcript_fragments = []
+                    if 'events' in sub_data:
+                        for event in sub_data['events']:
+                            if 'segs' in event:
+                                for seg in event['segs']:
+                                    if seg['utf8'].strip():
+                                        transcript_fragments.append(seg['utf8'].strip())
+                    transcript_text = " ".join(transcript_fragments)
                 else:
-                    # For short links like youtu.be/xyz?si=abc
-                    video_id = url.split("/")[-1].split("?")[0]
+                    raise Exception("Could not find a readable transcript format.")
                 
-                # 2. Load your cookies.txt into a requests session to bypass YouTube blocks
-                session = requests.Session()
-                cookie_jar = http.cookiejar.MozillaCookieJar('cookies.txt')
-                cookie_jar.load(ignore_discard=True, ignore_expires=True)
-                session.cookies = cookie_jar
-                
-                # 3. Initialize the modern API instance with our authenticated session
-                api_instance = YouTubeTranscriptApi(http_client=session)
-                
-                # Fetch the transcript (it defaults to English, or you can pass languages=[])
-                transcript_list = api_instance.fetch(video_id)
-                
-                # Join the text fragments into a single paragraph
-                transcript_text = " ".join([item['text'] for item in transcript_list])
-                
-                # 4. Initialize the Gemini client and generate content using the language choice
+                if not transcript_text.strip():
+                    raise Exception("The extracted transcript is empty.")
+
+                # 4. Initialize the Gemini client and generate content
                 client = genai.Client()
                 
                 prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
