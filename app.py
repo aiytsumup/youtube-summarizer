@@ -26,8 +26,7 @@ if st.button("Summarize Video"):
                     video_id = url.split("/")[-1].split("?")[0]
                 
                 # 2. Grab the text transcript using the updated API syntax
-                api_instance = YouTubeTranscriptApi()
-                transcript_list = api_instance.get_transcript(video_id)
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
                 
                 # Join the text fragments into a single paragraph
                 transcript_text = " ".join([item['text'] for item in transcript_list])
