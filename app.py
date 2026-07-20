@@ -1,11 +1,11 @@
 import streamlit as st
-import yt_dlp
+import requests
 import os
 import time
 from google import genai
 
-st.title("🎬 AI YouTube Summarizer (Stable Audio Engine)")
-st.write("Paste a YouTube link below. The app will securely process the video's audio track via Gemini for a 100% reliable summary.")
+st.title("🎬 AI YouTube Summarizer (Ultra-Stable Pipeline)")
+st.write("Paste a YouTube link below. The app will bypass cloud data-center restrictions to securely analyze the video track.")
 
 # Language selection dropdown
 language = st.selectbox(
@@ -18,48 +18,54 @@ url = st.text_input("Paste YouTube Video URL:", placeholder="https://www.youtube
 
 if st.button("Summarize Video"):
     if url:
-        # Create visual containers to keep UI clean
         status_container = st.empty()
         error_container = st.empty()
-        
-        # Audio file naming configuration
-        audio_filename = "youtube_audio_track"
-        audio_filepath = f"{audio_filename}.mp3"
+        audio_filepath = "downloaded_track.mp3"
         
         try:
-            # Step 1: Download the audio track using yt-dlp
             with status_container.container():
-                st.info("📥 Streaming audio track from YouTube video...")
+                st.info("📥 Establishing bypass tunnel and extracting audio stream...")
             
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': audio_filename,
-                'cookiefile': 'cookies.txt',
-                # Force yt-dlp to mimic a native iOS/Android client app to bypass data center firewalls
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['ios', 'android'],
-                        'skip': ['webpage']
-                    }
-                },
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-                'quiet': True,
-                'no_warnings': True,
+            # Clean up URL format to ensure API compatibility
+            clean_url = url.split("?")[0].split("&")[0]
+            
+            # Use a specialized public media gateway to fetch the audio download link
+            api_endpoint = f"https://api.cobalt.tools/api/json"
+            payload = {
+                "url": clean_url,
+                "isAudioOnly": True,
+                "audioFormat": "mp3",
+                "vCodec": "h264",
+                "aCodec": "mp3",
+                "isNoAudio": False
+            }
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
             }
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            api_response = requests.post(api_endpoint, json=payload, headers=headers)
             
-            if not os.path.exists(audio_filepath):
-                raise Exception("Audio extraction failed. The media file was not created successfully.")
+            if api_response.status_code != 200:
+                raise Exception("The media streaming gateway is temporarily busy. Please try again in a few seconds.")
+                
+            download_url = api_response.json().get("url")
+            if not download_url:
+                raise Exception("Could not resolve a stable audio stream for this video link.")
+                
+            # Stream download the audio file directly into the local environment
+            audio_data = requests.get(download_url, stream=True)
+            with open(audio_filepath, "wb") as f:
+                for chunk in audio_data.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            if not os.path.exists(audio_filepath) or os.path.getsize(audio_filepath) == 0:
+                raise Exception("Audio stream verification failed. Zero bytes recovered.")
 
-            # Step 2: Upload the audio file to Google's Gemini File API
+            # Step 2: Upload to Gemini File API
             with status_container.container():
-                st.info("🚀 Uploading audio payload to Gemini processing infrastructure...")
+                st.info("🚀 Forwarding audio payload to Gemini processing infrastructure...")
             
             client = genai.Client()
             audio_file = client.files.upload(file=audio_filepath)
@@ -89,27 +95,22 @@ if st.button("Summarize Video"):
                 contents=[prompt, audio_file]
             )
             
-            # Clean up the UI status indicators and print the markdown text
             status_container.empty()
             st.success("✨ Summary Generated Successfully!")
             st.write(response.text)
             
-            # Step 5: Clean up the file from Google's servers immediately
+            # Step 5: Clean up file from Google's servers
             client.files.delete(name=audio_file.name)
             
         except Exception as e:
             status_container.empty()
             error_msg = str(e)
             
-            # Translate cryptic system bugs into elegant tips for your visitors
             if "503" in error_msg or "high demand" in error_msg:
                 error_container.warning("⏳ The AI engine is experiencing heavy demand right now. Please wait a few moments and click again!")
-            elif "404" in error_msg:
-                error_container.error("🔍 We couldn't locate that specific link. Please double-check your formatting.")
             else:
-                error_container.error(f"🩹 Something disrupted processing: {error_msg}")
+                error_container.error(f"🩹 Processing notice: {error_msg}")
                 
         finally:
-            # Crucial cleanup step to maintain server environment storage hygiene
             if os.path.exists(audio_filepath):
                 os.remove(audio_filepath)
