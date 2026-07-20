@@ -5,6 +5,12 @@ from google import genai
 st.title("🎬 AI YouTube Summarizer")
 st.write("Paste a YouTube link below to get an instant AI summary of the video transcript.")
 
+# 👇 1. Added the language selection dropdown right here!
+language = st.selectbox(
+    "Select the summary language:",
+    ["English", "Hindi", "Tamil", "Telugu", "Spanish", "French", "German"]
+)
+
 # Text input for the user's YouTube link
 url = st.text_input("Paste YouTube Video URL:", placeholder="https://www.youtube.com/watch?v=...")
 
@@ -19,41 +25,28 @@ if st.button("Summarize Video"):
                     # For short links like youtu.be/xyz?si=abc
                     video_id = url.split("/")[-1].split("?")[0]
                 
-               # 2. Grab the text transcript using the updated API syntax
+                # 2. Grab the text transcript using the updated API syntax
                 api_instance = YouTubeTranscriptApi()
-                transcript_list = api_instance.list(video_id)
+                transcript_list = api_instance.get_transcript(video_id)
                 
-                # Automatically pick the first available transcript (English, Hindi, etc.)
-                srt_object = next(iter(transcript_list))
-                srt = srt_object.fetch()
+                # Join the text fragments into a single paragraph
+                transcript_text = " ".join([item['text'] for item in transcript_list])
                 
-                # Bulletproof text parsing that handles both new and old library formats
-                transcript_parts = []
-                for item in srt:
-                    if hasattr(item, 'text'):
-                        transcript_parts.append(item.text)
-                    elif isinstance(item, dict) and 'text' in item:
-                        transcript_parts.append(item['text'])
-                    else:
-                        transcript_parts.append(str(item))
-                        
-                transcript = " ".join(transcript_parts)
-                
-                # 3. Initialize the Gemini client
+                # 3. Initialize the Gemini client and generate content using the language choice
                 client = genai.Client()
                 
-             # 4. Prompt Gemini to clean up and condense the text
+                # 👇 2. Dynamic prompt that forces Gemini to use the language selected above
+                prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
+                and summarizing the entire video and providing the important points in bullets.
+                Please provide the summary exactly in the {language} language."""
+                
                 response = client.models.generate_content(
-                    model='gemini-3.1-flash-lite',  # <-- Swap to the stable lite server track!
-                    contents=f"Please provide a clean, highly structured, bulleted summary of the following video transcript:\n\n{transcript}"
+                    model="gemini-2.5-flash",
+                    contents=[prompt, transcript_text]
                 )
                 
-                st.success("Done!")
-                st.subheader("🤖 AI Summary")
+                st.success("Summary Generated!")
                 st.write(response.text)
                 
             except Exception as e:
-                st.error(f"Something went wrong: {e}")
-                st.info("Tip: If it complains about API keys, make sure your GEMINI_API_KEY environment variable is set in the terminal.")
-    else:
-        st.warning("Please paste a valid YouTube URL first!")
+                st.error(f"An error occurred: {str(e)}")
