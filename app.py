@@ -32,9 +32,16 @@ if st.button("Summarize Video"):
                 st.info("📥 Streaming audio track from YouTube video...")
             
             ydl_opts = {
-                'format': 'worst/best',  # Progressive download path to bypass center IP locks
+                'format': 'bestaudio/best',
                 'outtmpl': audio_filename,
                 'cookiefile': 'cookies.txt',
+                # Force yt-dlp to mimic a native iOS/Android client app to bypass data center firewalls
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['ios', 'android'],
+                        'skip': ['webpage']
+                    }
+                },
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
@@ -78,7 +85,7 @@ if st.button("Summarize Video"):
             You must reply entirely and explicitly in the {language} language."""
             
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-2.5-flash",
                 contents=[prompt, audio_file]
             )
             
