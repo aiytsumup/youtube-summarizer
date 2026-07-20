@@ -26,7 +26,7 @@ if st.button("Summarize Video"):
                     video_id = url.split("/")[-1].split("?")[0]
                 
                 # 2. Grab the text transcript using the updated API syntax
-               api_instance = YouTubeTranscriptApi()
+                api_instance = YouTubeTranscriptApi()
                 transcript_list = api_instance.fetch(video_id).to_raw_data()
                 
                 # Join the text fragments into a single paragraph
@@ -35,7 +35,6 @@ if st.button("Summarize Video"):
                 # 3. Initialize the Gemini client and generate content using the language choice
                 client = genai.Client()
                 
-                # 👇 2. Dynamic prompt that forces Gemini to use the language selected above
                 prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
                 and summarizing the entire video and providing the important points in bullets.
                 Please provide the summary exactly in the {language} language."""
