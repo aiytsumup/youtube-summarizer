@@ -31,9 +31,8 @@ if st.button("Summarize Video"):
             with status_container.container():
                 st.info("📥 Streaming audio track from YouTube video...")
             
-ydl_opts = {
-                # Fallback to standard progressive formats to bypass data-center IP binding
-                'format': 'worst/best',
+            ydl_opts = {
+                'format': 'worst/best',  # Progressive download path to bypass center IP locks
                 'outtmpl': audio_filename,
                 'cookiefile': 'cookies.txt',
                 'postprocessors': [{
@@ -79,7 +78,7 @@ ydl_opts = {
             You must reply entirely and explicitly in the {language} language."""
             
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=[prompt, audio_file]
             )
             
