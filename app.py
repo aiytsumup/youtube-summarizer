@@ -31,9 +31,10 @@ if st.button("Summarize Video"):
             with status_container.container():
                 st.info("📥 Steaming audio track from YouTube video...")
             
-            ydl_opts = {
+           ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': audio_filename,
+                'cookiefile': 'cookies.txt',  # <-- Add this line right here!
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
