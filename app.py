@@ -18,6 +18,9 @@ if st.button("Summarize Video"):
     if url:
         with st.spinner("Fetching transcript and generating summary..."):
             try:
+                import requests
+                import http.cookiejar
+                
                 # 1. Parse the video ID out of the URL string cleanly
                 if "v=" in url:
                     video_id = url.split("v=")[-1].split("&")[0]
@@ -25,13 +28,22 @@ if st.button("Summarize Video"):
                     # For short links like youtu.be/xyz?si=abc
                     video_id = url.split("/")[-1].split("?")[0]
                 
-                # 2. Grab the text transcript using the cookie file path directly
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, cookies='cookies.txt')
+                # 2. Load your cookies.txt into a requests session to bypass YouTube blocks
+                session = requests.Session()
+                cookie_jar = http.cookiejar.MozillaCookieJar('cookies.txt')
+                cookie_jar.load(ignore_discard=True, ignore_expires=True)
+                session.cookies = cookie_jar
+                
+                # 3. Initialize the modern API instance with our authenticated session
+                api_instance = YouTubeTranscriptApi(http_client=session)
+                
+                # Fetch the transcript (it defaults to English, or you can pass languages=[])
+                transcript_list = api_instance.fetch(video_id)
                 
                 # Join the text fragments into a single paragraph
                 transcript_text = " ".join([item['text'] for item in transcript_list])
                 
-                # 3. Initialize the Gemini client and generate content using the language choice
+                # 4. Initialize the Gemini client and generate content using the language choice
                 client = genai.Client()
                 
                 prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
@@ -46,7 +58,5 @@ if st.button("Summarize Video"):
                 st.success("Summary Generated!")
                 st.write(response.text)
                 
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
