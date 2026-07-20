@@ -80,9 +80,8 @@ if st.button("Summarize Video"):
                 prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
                 and summarizing the entire video and providing the important points in bullets.
                 Please provide the summary exactly in the {language} language."""
-                
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-2.5-flash-latest",
                     contents=[prompt, transcript_text]
                 )
                 
