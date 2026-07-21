@@ -1,74 +1,119 @@
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi
+import yt_dlp
+import os
+import time
 from google import genai
 
+# App Layout
 st.title("🎬 AI YouTube Summarizer")
-st.write("Paste a YouTube link below to summarize its content automatically.")
+st.write("Paste a YouTube link below to get an instant AI summary in your preferred language.")
 
-# Language selection
+# Language selection dropdown
 language = st.selectbox(
     "Select the summary language:",
     ["English", "Hindi", "Tamil", "Telugu", "Spanish", "French", "German"]
 )
 
+# URL Input
 url = st.text_input("Paste YouTube Video URL:", placeholder="https://www.youtube.com/watch?v=...")
 
-# Store transcript text in session state across UI clicks
-if "transcript_text" not in st.session_state:
-    st.session_state.transcript_text = ""
-
-def extract_video_id(youtube_url):
-    """Extracts video ID from standard or short YouTube URLs."""
-    if "youtu.be/" in youtube_url:
-        return youtube_url.split("youtu.be/")[1].split("?")[0]
-    elif "watch?v=" in youtube_url:
-        return youtube_url.split("watch?v=")[1].split("&")[0]
-    return None
-
-if st.button("Fetch & Summarize Video"):
+if st.button("Summarize Video"):
     if not url:
-        st.error("Please paste a valid YouTube link first.")
+        st.warning("Please enter a valid YouTube URL.")
     else:
-        video_id = extract_video_id(url)
-        if not video_id:
-            st.error("Invalid YouTube URL. Please double-check the link.")
-        else:
-            with st.spinner("Attempting to retrieve transcript..."):
-                try:
-                    # 1. Try automated fetching
-                    ytt_api = YouTubeTranscriptApi()
-                    transcript_list = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'te', 'es', 'fr', 'de'])
-                    st.session_state.transcript_text = " ".join([chunk.text for chunk in transcript_list])
-                    st.success("Transcript retrieved automatically!")
-                except Exception:
-                    st.session_state.transcript_text = ""
-                    st.warning("⚠️ YouTube blocked automated transcript retrieval from Streamlit's cloud server IP.")
+        status_container = st.empty()
+        error_container = st.empty()
+        
+        audio_filename = "temp_youtube_audio"
+        audio_filepath = f"{audio_filename}.mp3"
+        
+        try:
+            # Step 1: Extract Audio Stream
+            with status_container.container():
+                st.info("📥 Extracting audio track from YouTube...")
+            
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': audio_filename,
+                'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['ios', 'android'],
+                        'skip': ['webpage']
+                    }
+                },
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            # Remove existing cookies parameter if file doesn't exist
+            if not ydl_opts['cookiefile']:
+                del ydl_opts['cookiefile']
 
-# Fallback UI element if automated fetch is blocked or fails
-if st.session_state.get("transcript_text") == "":
-    st.info("💡 **Fallback Mode:** Open the video on YouTube, click `...` -> `Show transcript`, copy it, and paste it below:")
-    manual_transcript = st.text_area("Paste Transcript / Video Notes Here:", height=200)
-    if manual_transcript.strip():
-        st.session_state.transcript_text = manual_transcript
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            if not os.path.exists(audio_filepath):
+                raise Exception("Audio extraction failed. Please ensure the video is public.")
 
-# Trigger Gemini Summary once text is available
-if st.session_state.transcript_text:
-    if st.button("Generate AI Summary"):
-        with st.spinner("Gemini is analyzing the text..."):
-            try:
-                client = genai.Client()
+            # Step 2: Upload to Gemini API
+            with status_container.container():
+                st.info("🚀 Uploading media payload to Gemini AI...")
+            
+            client = genai.Client()
+            audio_file = client.files.upload(file=audio_filepath)
+            
+            # Step 3: Wait for Processing
+            with status_container.container():
+                st.info("⚙️ Processing media track...")
+            
+            while audio_file.state.name == "PROCESSING":
+                time.sleep(2)
+                audio_file = client.files.get(name=audio_file.name)
                 
-                prompt = f"""You are an advanced YouTube video summarizer.
-                Take the following transcript or text content, summarize the main discussion, and list key bullet points.
-                Provide the entire response explicitly in the {language} language."""
+            if audio_file.state.name == "FAILED":
+                raise Exception("Gemini API failed to process the audio track.")
 
-                response = client.models.generate_content(
-                    model="gemini-3.5-flash",
-                    contents=[prompt, st.session_state.transcript_text]
-                )
-
-                st.success("✨ Summary Generated Successfully!")
-                st.write(response.text)
-
-            except Exception as e:
-                st.error(f"Error calling Gemini API: {str(e)}")
+            # Step 4: Generate Summary in Selected Language
+            with status_container.container():
+                st.info("🧠 Generating key points and summary...")
+            
+            prompt = f"""You are an expert YouTube video summarizer.
+            Analyze the provided audio recording carefully. Provide a clear, comprehensive summary 
+            along with structural bullet points detailing the key events, concepts, or takeaways.
+            You MUST reply entirely and explicitly in the {language} language."""
+            
+            # Using stable model identifier
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[prompt, audio_file]
+            )
+            
+            status_container.empty()
+            st.success("✨ Summary Generated Successfully!")
+            st.write(response.text)
+            
+            # Step 5: Remote Cleanup
+            client.files.delete(name=audio_file.name)
+            
+        except Exception as e:
+            status_container.empty()
+            error_msg = str(e)
+            
+            # User-friendly error shielding
+            if "503" in error_msg or "high demand" in error_msg:
+                error_container.warning("⏳ The AI engine is experiencing heavy demand right now. Please wait 10 seconds and click 'Summarize' again.")
+            elif "403" in error_msg or "Forbidden" in error_msg:
+                error_container.error("🔒 YouTube blocked this cloud request (HTTP 403). Try re-exporting a fresh `cookies.txt` or testing locally.")
+            else:
+                error_container.error(f" An error occurred: {error_msg}")
+                
+        finally:
+            # Local Storage Hygiene Cleanup
+            if os.path.exists(audio_filepath):
+                os.remove(audio_filepath)
