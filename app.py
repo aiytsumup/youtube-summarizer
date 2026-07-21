@@ -1,11 +1,11 @@
 import streamlit as st
-import requests
+import yt_dlp
 import os
 import time
 from google import genai
 
-st.title("🎬 AI YouTube Summarizer (Ultra-Stable Pipeline)")
-st.write("Paste a YouTube link below. The app will bypass cloud data-center restrictions to securely analyze the video track.")
+st.title("🎬 AI YouTube Summarizer")
+st.write("Paste a YouTube link below to get an instant AI summary of the video audio.")
 
 # Language selection dropdown
 language = st.selectbox(
@@ -20,70 +20,55 @@ if st.button("Summarize Video"):
     if url:
         status_container = st.empty()
         error_container = st.empty()
-        audio_filepath = "downloaded_track.mp3"
+        
+        audio_filename = "youtube_audio_track"
+        audio_filepath = f"{audio_filename}.mp3"
         
         try:
+            # Step 1: Download audio stream using yt-dlp
             with status_container.container():
-                st.info("📥 Establishing bypass tunnel and extracting audio stream...")
+                st.info("📥 Downloading audio track from YouTube...")
             
-            # Clean up URL format to ensure API compatibility
-            clean_url = url.split("?")[0].split("&")[0]
-            
-            # Use a specialized public media gateway to fetch the audio download link
-            api_endpoint = f"https://api.cobalt.tools/api/json"
-            payload = {
-                "url": clean_url,
-                "isAudioOnly": True,
-                "audioFormat": "mp3",
-                "vCodec": "h264",
-                "aCodec": "mp3",
-                "isNoAudio": False
-            }
-            headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json"
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': audio_filename,
+                'cookiefile': 'cookies.txt',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'no_warnings': True,
             }
             
-            api_response = requests.post(api_endpoint, json=payload, headers=headers)
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
             
-            if api_response.status_code != 200:
-                raise Exception("The media streaming gateway is temporarily busy. Please try again in a few seconds.")
-                
-            download_url = api_response.json().get("url")
-            if not download_url:
-                raise Exception("Could not resolve a stable audio stream for this video link.")
-                
-            # Stream download the audio file directly into the local environment
-            audio_data = requests.get(download_url, stream=True)
-            with open(audio_filepath, "wb") as f:
-                for chunk in audio_data.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            
-            if not os.path.exists(audio_filepath) or os.path.getsize(audio_filepath) == 0:
-                raise Exception("Audio stream verification failed. Zero bytes recovered.")
+            if not os.path.exists(audio_filepath):
+                raise Exception("Audio file creation failed.")
 
-            # Step 2: Upload to Gemini File API
+            # Step 2: Upload audio file to Gemini File API
             with status_container.container():
-                st.info("🚀 Forwarding audio payload to Gemini processing infrastructure...")
+                st.info("🚀 Uploading audio payload to Gemini...")
             
             client = genai.Client()
             audio_file = client.files.upload(file=audio_filepath)
             
-            # Step 3: Wait for processing to finalize on Google's cloud servers
+            # Step 3: Wait for processing on Gemini cloud
             with status_container.container():
-                st.info("⚙️ Waiting for Google's multi-modal processing engine to ready the track...")
+                st.info("⚙️ Processing audio track with Gemini...")
             
             while audio_file.state.name == "PROCESSING":
                 time.sleep(2)
                 audio_file = client.files.get(name=audio_file.name)
                 
             if audio_file.state.name == "FAILED":
-                raise Exception("Google media API failed to securely compile the video track.")
+                raise Exception("Google media API failed to process the track.")
 
-            # Step 4: Generate the text content using the production flash model
+            # Step 4: Generate summary
             with status_container.container():
-                st.info("🧠 Gemini is listening to the track and generating your summary...")
+                st.info("🧠 Generating your summary...")
             
             prompt = f"""You are an advanced media intelligence assistant. 
             Analyze the provided audio recording carefully. Break down the core discussion topics,
@@ -99,7 +84,7 @@ if st.button("Summarize Video"):
             st.success("✨ Summary Generated Successfully!")
             st.write(response.text)
             
-            # Step 5: Clean up file from Google's servers
+            # Step 5: Clean up file on Google servers
             client.files.delete(name=audio_file.name)
             
         except Exception as e:
@@ -107,10 +92,11 @@ if st.button("Summarize Video"):
             error_msg = str(e)
             
             if "503" in error_msg or "high demand" in error_msg:
-                error_container.warning("⏳ The AI engine is experiencing heavy demand right now. Please wait a few moments and click again!")
+                error_container.warning("⏳ The AI engine is experiencing heavy demand right now. Please try again in a few moments!")
             else:
-                error_container.error(f"🩹 Processing notice: {error_msg}")
+                error_container.error(f"An error occurred: {error_msg}")
                 
         finally:
+            # Clean up local audio file
             if os.path.exists(audio_filepath):
                 os.remove(audio_filepath)
