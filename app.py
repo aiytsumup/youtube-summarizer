@@ -1,51 +1,119 @@
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi
+import yt_dlp
+import os
+import time
 from google import genai
 
+# App Layout
 st.title("🎬 AI YouTube Summarizer")
-st.write("Paste a YouTube link below to get an instant AI summary of the video transcript.")
+st.write("Paste a YouTube link below to get an instant AI summary in your preferred language.")
 
-# 👇 1. Added the language selection dropdown right here!
+# Language selection dropdown
 language = st.selectbox(
     "Select the summary language:",
     ["English", "Hindi", "Tamil", "Telugu", "Spanish", "French", "German"]
 )
 
-# Text input for the user's YouTube link
+# URL Input
 url = st.text_input("Paste YouTube Video URL:", placeholder="https://www.youtube.com/watch?v=...")
 
 if st.button("Summarize Video"):
-    if url:
-        with st.spinner("Fetching transcript and generating summary..."):
-            try:
-                # 1. Parse the video ID out of the URL string cleanly
-                if "v=" in url:
-                    video_id = url.split("v=")[-1].split("&")[0]
-                else:
-                    # For short links like youtu.be/xyz?si=abc
-                    video_id = url.split("/")[-1].split("?")[0]
+    if not url:
+        st.warning("Please enter a valid YouTube URL.")
+    else:
+        status_container = st.empty()
+        error_container = st.empty()
+        
+        audio_filename = "temp_youtube_audio"
+        audio_filepath = f"{audio_filename}.mp3"
+        
+        try:
+            # Step 1: Extract Audio Stream
+            with status_container.container():
+                st.info("📥 Extracting audio track from YouTube...")
+            
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': audio_filename,
+                'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['ios', 'android'],
+                        'skip': ['webpage']
+                    }
+                },
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            # Remove existing cookies parameter if file doesn't exist
+            if not ydl_opts['cookiefile']:
+                del ydl_opts['cookiefile']
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            if not os.path.exists(audio_filepath):
+                raise Exception("Audio extraction failed. Please ensure the video is public.")
+
+            # Step 2: Upload to Gemini API
+            with status_container.container():
+                st.info("🚀 Uploading media payload to Gemini AI...")
+            
+            client = genai.Client()
+            audio_file = client.files.upload(file=audio_filepath)
+            
+            # Step 3: Wait for Processing
+            with status_container.container():
+                st.info("⚙️ Processing media track...")
+            
+            while audio_file.state.name == "PROCESSING":
+                time.sleep(2)
+                audio_file = client.files.get(name=audio_file.name)
                 
-                # 2. Grab the text transcript using the updated API syntax
-                api_instance = YouTubeTranscriptApi()
-                transcript_list = api_instance.fetch(video_id).to_raw_data()
+            if audio_file.state.name == "FAILED":
+                raise Exception("Gemini API failed to process the audio track.")
+
+            # Step 4: Generate Summary in Selected Language
+            with status_container.container():
+                st.info("🧠 Generating key points and summary...")
+            
+            prompt = f"""You are an expert YouTube video summarizer.
+            Analyze the provided audio recording carefully. Provide a clear, comprehensive summary 
+            along with structural bullet points detailing the key events, concepts, or takeaways.
+            You MUST reply entirely and explicitly in the {language} language."""
+            
+            # Using stable model identifier
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=[prompt, audio_file]
+            )
+            
+            status_container.empty()
+            st.success("✨ Summary Generated Successfully!")
+            st.write(response.text)
+            
+            # Step 5: Remote Cleanup
+            client.files.delete(name=audio_file.name)
+            
+        except Exception as e:
+            status_container.empty()
+            error_msg = str(e)
+            
+            # User-friendly error shielding
+            if "503" in error_msg or "high demand" in error_msg:
+                error_container.warning("⏳ The AI engine is experiencing heavy demand right now. Please wait 10 seconds and click 'Summarize' again.")
+            elif "403" in error_msg or "Forbidden" in error_msg:
+                error_container.error("🔒 YouTube blocked this cloud request (HTTP 403). Try re-exporting a fresh `cookies.txt` or testing locally.")
+            else:
+                error_container.error(f" An error occurred: {error_msg}")
                 
-                # Join the text fragments into a single paragraph
-                transcript_text = " ".join([item['text'] for item in transcript_list])
-                
-                # 3. Initialize the Gemini client and generate content using the language choice
-                client = genai.Client()
-                
-                prompt = f"""You are a YouTube video summarizer. You will be taking the transcript text
-                and summarizing the entire video and providing the important points in bullets.
-                Please provide the summary exactly in the {language} language."""
-                
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=[prompt, transcript_text]
-                )
-                
-                st.success("Summary Generated!")
-                st.write(response.text)
-                
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+        finally:
+            # Local Storage Hygiene Cleanup
+            if os.path.exists(audio_filepath):
+                os.remove(audio_filepath)
