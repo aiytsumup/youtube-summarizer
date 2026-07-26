@@ -34,16 +34,16 @@ if st.button("Summarize Video", type="primary"):
             with status_container.container():
                 st.info("📥 Extracting audio track from YouTube...")
             
-           # Configure yt-dlp to bypass cloud IP restrictions using iOS client spoofing
+           # Configure yt-dlp with flexible format selection and fallback client rules
             ydl_opts = {
-                'format': 'bestaudio/best',
+                'format': 'ba/b',  # Tries best audio first, falls back to best combined video/audio
                 'outtmpl': audio_filepath,
                 'quiet': True,
                 'no_warnings': True,
                 'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
                 'extractor_args': {
                     'youtube': {
-                        'player_client': ['ios', 'mweb']
+                        'player_client': ['android', 'web']
                     }
                 }
             }
