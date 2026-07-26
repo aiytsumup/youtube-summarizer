@@ -1,4 +1,4 @@
 streamlit
-yt-dlp
+yt-dlp>=2024.08.01
 youtube-transcript-api
 google-genai
