@@ -31,9 +31,9 @@ if st.button("Summarize Video"):
                     )
                 )
 
-            # 2. Fetch transcript
-            transcript_list = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'te', 'es', 'fr', 'de'])
-            transcript_text = " ".join([chunk.text for chunk in transcript_list])
+                # 2. Fetch transcript
+                transcript_list = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'te', 'es', 'fr', 'de'])
+                transcript_text = " ".join([chunk.text for chunk in transcript_list])
 
                 # Send text directly to Gemini
                 client = genai.Client()
