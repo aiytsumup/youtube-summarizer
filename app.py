@@ -5,6 +5,8 @@ import time
 from google import genai
 
 # App Layout
+st.set_page_config(page_title="AI YouTube Summarizer", page_icon="🎬")
+
 st.title("🎬 AI YouTube Summarizer")
 st.write("Paste a YouTube link below to get an instant AI summary in your preferred language.")
 
@@ -17,7 +19,7 @@ language = st.selectbox(
 # URL Input
 url = st.text_input("Paste YouTube Video URL:", placeholder="https://www.youtube.com/watch?v=...")
 
-if st.button("Summarize Video"):
+if st.button("Summarize Video", type="primary"):
     if not url:
         st.warning("Please enter a valid YouTube URL.")
     else:
@@ -32,27 +34,20 @@ if st.button("Summarize Video"):
             with status_container.container():
                 st.info("📥 Extracting audio track from YouTube...")
             
-            # Set up yt-dlp options
-    ydl_opts = {
-        'format': 'm4a/bestaudio/best',
-        'outtmpl': audio_filepath,
-        'quiet': True,
-        'no_warnings': True,
-        'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
-    }
+            # Configure yt-dlp options
+            ydl_opts = {
+                'format': 'm4a/bestaudio/best',
+                'outtmpl': audio_filepath,
+                'quiet': True,
+                'no_warnings': True,
+                'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
+            }
 
-    # Remove cookiefile key if file doesn't exist
-    if 'cookiefile' in ydl_opts and not ydl_opts['cookiefile']:
-        del ydl_opts['cookiefile']
+            # Remove cookiefile key if file doesn't exist
+            if 'cookiefile' in ydl_opts and not ydl_opts['cookiefile']:
+                del ydl_opts['cookiefile']
 
-    # Execute download inside try block
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-    except Exception as e:
-        st.error(f"Failed to download audio: {str(e)}")
-        return
-
+            # Download audio stream
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
             
@@ -109,7 +104,7 @@ if st.button("Summarize Video"):
             elif "403" in error_msg or "Forbidden" in error_msg:
                 error_container.error("🔒 YouTube blocked this cloud request (HTTP 403). Try re-exporting a fresh `cookies.txt` or testing locally.")
             else:
-                error_container.error(f" An error occurred: {error_msg}")
+                error_container.error(f"An error occurred: {error_msg}")
                 
         finally:
             # Local Storage Hygiene Cleanup
