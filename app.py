@@ -23,10 +23,17 @@ if st.button("Summarize Video"):
             st.error("Invalid YouTube URL.")
         else:
             try:
-                # Fetch text transcript directly (No yt-dlp media downloading required!)
-                ytt_api = YouTubeTranscriptApi()
-                transcript = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'es', 'fr'])
-                transcript_text = " ".join([item.text for item in transcript])
+            # 1. Initialize API with Webshare Proxy credentials from Secrets
+            ytt_api = YouTubeTranscriptApi(
+                proxy_config=WebshareProxyConfig(
+                    proxy_username=st.secrets["hpmybilg"],
+                    proxy_password=st.secrets["cgvv386k24y2"],
+                )
+            )
+
+            # 2. Fetch transcript
+            transcript_list = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'te', 'es', 'fr', 'de'])
+            transcript_text = " ".join([chunk.text for chunk in transcript_list])
 
                 # Send text directly to Gemini
                 client = genai.Client()
