@@ -24,11 +24,11 @@ if st.button("Summarize Video"):
             st.error("Invalid YouTube URL.")
         else:
             try:
-                # 1. Initialize API with Webshare Proxy credentials from Secrets
+                # RIGHT: Use the exact key names defined in your secrets.toml
                 ytt_api = YouTubeTranscriptApi(
                     proxy_config=WebshareProxyConfig(
-                        proxy_username=st.secrets["hpmybilg"],
-                        proxy_password=st.secrets["cgvv386k24y2"],
+                        proxy_username=st.secrets["WEBSHARE_USERNAME"],
+                        proxy_password=st.secrets["WEBSHARE_PASSWORD"],
                     )
                 )
 
