@@ -46,14 +46,16 @@ if st.button("Summarize Video"):
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
-                }],
-                'quiet': True,
-                'no_warnings': True,
-            }
-            
-            # Remove existing cookies parameter if file doesn't exist
-            if not ydl_opts['cookiefile']:
-                del ydl_opts['cookiefile']
+                # ✅ NEW CODE:
+            }],
+            'quiet': True,
+            'no_warnings': True,
+            'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
+    }
+
+        # Remove existing cookies parameter if file doesn't exist
+        if 'cookiefile' in ydl_opts and not ydl_opts['cookiefile']:
+        del ydl_opts['cookiefile']
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
