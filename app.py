@@ -32,30 +32,26 @@ if st.button("Summarize Video"):
             with status_container.container():
                 st.info("📥 Extracting audio track from YouTube...")
             
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': audio_filename,
-                'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['ios', 'android'],
-                        'skip': ['webpage']
-                    }
-                },
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                # ✅ NEW CODE:
-            }],
-            'quiet': True,
-            'no_warnings': True,
-            'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
+            # Set up yt-dlp options
+    ydl_opts = {
+        'format': 'm4a/bestaudio/best',
+        'outtmpl': audio_filepath,
+        'quiet': True,
+        'no_warnings': True,
+        'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
     }
 
-        # Remove existing cookies parameter if file doesn't exist
-        if 'cookiefile' in ydl_opts and not ydl_opts['cookiefile']:
+    # Remove cookiefile key if file doesn't exist
+    if 'cookiefile' in ydl_opts and not ydl_opts['cookiefile']:
         del ydl_opts['cookiefile']
+
+    # Execute download inside try block
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception as e:
+        st.error(f"Failed to download audio: {str(e)}")
+        return
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
