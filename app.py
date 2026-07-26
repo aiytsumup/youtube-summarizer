@@ -36,7 +36,7 @@ if st.button("Summarize Video", type="primary"):
             
            # Configure yt-dlp to bypass cloud IP restrictions using iOS client spoofing
             ydl_opts = {
-                'format': 'm4a/bestaudio/best',
+                'format': 'bestaudio/best',
                 'outtmpl': audio_filepath,
                 'quiet': True,
                 'no_warnings': True,
