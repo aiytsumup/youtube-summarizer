@@ -1,6 +1,7 @@
 import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
+from youtube_transcript_api.proxies import WebshareProxyConfig
 
 st.title("🎬 AI YouTube Summarizer")
 
