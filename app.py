@@ -35,6 +35,7 @@ if st.button("Summarize Video"):
 
             except Exception as e:
                 st.warning("⚠️ YouTube is currently rate-limiting free proxy IPs. Please wait 10-15 minutes or test a different video link.")
+                st.stop()
                 
             # Send text directly to Gemini
                 client = genai.Client()
