@@ -24,13 +24,17 @@ if st.button("Summarize Video"):
             st.error("Invalid YouTube URL.")
         else:
             try:
-                # RIGHT: Use the exact key names defined in your secrets.toml
                 ytt_api = YouTubeTranscriptApi(
                     proxy_config=WebshareProxyConfig(
                         proxy_username=st.secrets["WEBSHARE_USERNAME"],
                         proxy_password=st.secrets["WEBSHARE_PASSWORD"],
                     )
                 )
+                transcript = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'te', 'es', 'fr', 'de'])
+                transcript_text = " ".join([item.text for item in transcript])
+
+            except Exception as e:
+            st.warning("⚠️ YouTube is currently rate-limiting free proxy IPs. Please wait 10-15 minutes or test a different video link.")
 
                 # 2. Fetch transcript
                 transcript_list = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'te', 'es', 'fr', 'de'])
