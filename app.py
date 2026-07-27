@@ -33,7 +33,7 @@ if st.button("Summarize Video"):
                 transcript = ytt_api.fetch(video_id, languages=['en', 'hi', 'ta', 'te', 'es', 'fr', 'de'])
                 transcript_text = " ".join([item.text for item in transcript])
 
-                except Exception as e:
+            except Exception as e:
                 st.warning("⚠️ YouTube is currently rate-limiting free proxy IPs. Please wait 10-15 minutes or test a different video link.")
                 
             # Send text directly to Gemini
